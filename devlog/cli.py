@@ -1,3 +1,5 @@
+import shutil
+
 import typer
 
 from devlog.ai import generate_devlog
@@ -18,32 +20,52 @@ def _generate_log(mode: str) -> None:
     path = write_devlog(commit, markdown, config)
     typer.echo(f"✔ devlog written → {path}")
 
-HOOK_CONTENT = """#!/bin/sh
-devlog
+def build_hook() -> str:
+    """Build a git hook that calls the currently installed devlog executable."""
+
+    devlog_path = shutil.which("devlog")
+
+    if not devlog_path:
+        raise RuntimeError(
+            "Could not find 'devlog' executable in PATH."
+        )
+
+    return f"""#!/bin/sh
+"{devlog_path}"
 """
- 
  
 @app.command()
 def install():
     """Install the git post-commit hook."""
- 
+
     try:
         git_root = get_git_root()
     except RuntimeError as e:
         typer.echo(f"✗ {e}", err=True)
         raise typer.Exit(1)
- 
+
     hook_path = git_root / ".git" / "hooks" / "post-commit"
- 
+
     if hook_path.exists():
-        typer.echo(f"✗ Hook already exists at {hook_path}", err=True)
-        typer.echo("  Run `devlog uninstall` first to reinstall.")
+        contents = hook_path.read_text()
+
+        if "devlog" not in contents:
+            typer.echo(
+                "✗ Existing post-commit hook is not managed by devlog.",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        typer.echo(
+            f"✗ Devlog hook already installed at {hook_path}",
+            err=True,
+        )
         raise typer.Exit(1)
- 
-    hook_path.write_text(HOOK_CONTENT)
+
+    hook_path.write_text(build_hook())
     hook_path.chmod(0o755)
+
     typer.echo(f"✔ post-commit hook installed → {hook_path}")
- 
  
 @app.command()
 def uninstall():
