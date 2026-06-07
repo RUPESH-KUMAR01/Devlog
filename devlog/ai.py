@@ -13,6 +13,36 @@ class GroqError(Exception):
     pass
 
 
+def _response_error_text(response: requests.Response) -> str:
+    """Return a short provider error message from an HTTP response."""
+
+    try:
+        data = response.json()
+    except ValueError:
+        data = None
+
+    if isinstance(data, dict):
+        error = data.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if message:
+                return str(message)
+
+            fallback = error.get("code") or error.get("type")
+            if fallback:
+                return str(fallback)
+
+        message = data.get("message")
+        if message:
+            return str(message)
+
+    body = response.text.strip()
+    if body:
+        return body[:500]
+
+    return "No response body."
+
+
 def _call_ollama(prompt: str, config: Config) -> str:
     """Send a prompt to Ollama and return the response text."""
 
@@ -98,19 +128,25 @@ def _call_groq(prompt: str, config: Config) -> str:
         print(f"→ HTTP Status: {response.status_code}")
 
         if response.status_code != 200:
-            print("→ Response body:")
-            print(response.text)
+            print("→ Error:")
+            print(_response_error_text(response))
 
         response.raise_for_status()
 
-    except requests.ConnectionError:
+    except requests.ConnectionError as e:
         raise GroqError(
             f"Could not connect to Groq at {base_url}. Check your network connection."
-        )
-    except requests.Timeout:
-        raise GroqError("Groq request timed out.")
+        ) from e
+    except requests.Timeout as e:
+        raise GroqError("Groq request timed out.") from e
     except requests.HTTPError as e:
-        raise GroqError(f"Groq returned an error: {e}")
+        error_response = e.response if e.response is not None else response
+        detail = _response_error_text(error_response)
+        raise GroqError(
+            f"Groq returned HTTP {error_response.status_code}: {detail}"
+        ) from e
+    except requests.RequestException as e:
+        raise GroqError(f"Groq request failed: {e}") from e
 
     try:
         data = response.json()
@@ -122,13 +158,18 @@ def _call_groq(prompt: str, config: Config) -> str:
     try:
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
-        raise GroqError(
-            f"Unexpected Groq response shape:\n{data}"
-        )
+        raise GroqError("Unexpected Groq response shape: missing message content.")
+
+    if not isinstance(content, str):
+        raise GroqError("Unexpected Groq response shape: message content is not text.")
+
+    content = content.strip()
+    if not content:
+        raise GroqError("Groq returned an empty response.")
 
     print("✓ Groq response received")
 
-    return content.strip()
+    return content
 
 
 def _call_llm(prompt: str, config: Config) -> str:

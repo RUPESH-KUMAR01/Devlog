@@ -4,7 +4,7 @@ import typer
 
 from devlog.ai import generate_devlog
 from devlog.collector import collect_devlog
-from devlog.config import load_config
+from devlog.config import Config, ConfigError, load_config
 from devlog.writer import get_git_root, write_devlog
 
 app = typer.Typer(
@@ -13,8 +13,16 @@ app = typer.Typer(
 )
 
 
+def _load_config_or_exit() -> Config:
+    try:
+        return load_config()
+    except ConfigError as e:
+        typer.echo(f"✗ {e}", err=True)
+        raise typer.Exit(1) from e
+
+
 def _generate_log(mode: str) -> None:
-    config = load_config()
+    config = _load_config_or_exit()
     commit = collect_devlog()
     markdown = generate_devlog(commit, config, mode=mode)
     path = write_devlog(commit, markdown, config)
@@ -95,7 +103,7 @@ def uninstall():
 def show_config():
     """Show resolved configuration."""
  
-    config = load_config()
+    config = _load_config_or_exit()
     typer.echo(f"provider      {config.provider}")
     typer.echo(f"provider_mode {config.provider_mode}")
     typer.echo(f"ollama_host   {config.ollama_host}")
@@ -116,7 +124,7 @@ def list_logs():
         typer.echo(f"✗ {e}", err=True)
         raise typer.Exit(1)
  
-    config = load_config()
+    config = _load_config_or_exit()
     output_dir = git_root / config.output_dir
  
     if not output_dir.exists() or not (logs := sorted(output_dir.glob("*.md"))):
@@ -137,7 +145,7 @@ def show(log_number: int = typer.Argument(..., help="Log number, e.g. 4")):
         typer.echo(f"✗ {e}", err=True)
         raise typer.Exit(1)
  
-    config = load_config()
+    config = _load_config_or_exit()
     output_dir = git_root / config.output_dir
     matches = list(output_dir.glob(f"{log_number:03d}-*.md"))
  

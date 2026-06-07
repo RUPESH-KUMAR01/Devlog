@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from devlog.ai import _call_groq, _call_llm
+import requests
+
+from devlog.ai import GroqError, _call_groq, _call_llm
 from devlog.config import Config
 
 
@@ -64,6 +66,61 @@ class GroqClientTests(unittest.TestCase):
         self.assertEqual(_call_llm("prompt", build_config("ollama")), "local")
         groq.assert_called_once()
         ollama.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("devlog.ai.requests.post")
+    def test_call_groq_reports_provider_error_message(self, post, _print):
+        response = Mock(status_code=401, text="")
+        response.json.return_value = {
+            "error": {
+                "message": "Invalid API key",
+            },
+        }
+        response.raise_for_status.side_effect = requests.HTTPError(
+            response=response
+        )
+        post.return_value = response
+
+        with self.assertRaisesRegex(GroqError, "HTTP 401: Invalid API key"):
+            _call_groq("Summarize this diff", build_config())
+
+    @patch("builtins.print")
+    @patch("devlog.ai.requests.post")
+    def test_call_groq_rejects_malformed_success_response(self, post, _print):
+        response = Mock(status_code=200, text="{}")
+        response.json.return_value = {
+            "choices": [],
+        }
+        post.return_value = response
+
+        with self.assertRaisesRegex(GroqError, "missing message content"):
+            _call_groq("Summarize this diff", build_config())
+
+    @patch("builtins.print")
+    @patch("devlog.ai.requests.post")
+    def test_call_groq_rejects_empty_response_content(self, post, _print):
+        response = Mock(status_code=200, text="{}")
+        response.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": "   ",
+                    },
+                },
+            ],
+        }
+        post.return_value = response
+
+        with self.assertRaisesRegex(GroqError, "empty response"):
+            _call_groq("Summarize this diff", build_config())
+
+    @patch("builtins.print")
+    @patch("devlog.ai.requests.post")
+    def test_call_groq_reports_timeout(self, post, _print):
+        post.side_effect = requests.Timeout
+
+        with self.assertRaisesRegex(GroqError, "timed out"):
+            _call_groq("Summarize this diff", build_config())
 
 
 if __name__ == "__main__":

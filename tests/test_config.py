@@ -67,6 +67,60 @@ api_key = "gsk_test"
         self.assertEqual(config.provider, "groq")
         self.assertEqual(config.groq_api_key, "gsk_env_test")
 
+    def test_load_config_uses_custom_groq_api_key_env(self):
+        self.write_global_config(
+            """
+[groq]
+api_key_env = "DEVLOG_GROQ_KEY"
+""".strip()
+        )
+        os.environ["DEVLOG_GROQ_KEY"] = "gsk_custom_env_test"
+
+        config = config_module.load_config()
+
+        self.assertEqual(config.provider, "groq")
+        self.assertEqual(config.groq_api_key, "gsk_custom_env_test")
+
+    def test_load_config_resolves_env_reference_in_api_key(self):
+        self.write_global_config(
+            """
+[groq]
+api_key = "$DEVLOG_GROQ_KEY"
+""".strip()
+        )
+        os.environ["DEVLOG_GROQ_KEY"] = "gsk_reference_test"
+
+        config = config_module.load_config()
+
+        self.assertEqual(config.provider, "groq")
+        self.assertEqual(config.groq_api_key, "gsk_reference_test")
+
+    def test_cloud_mode_requires_groq_api_key(self):
+        self.write_global_config(
+            """
+[provider]
+mode = "cloud"
+""".strip()
+        )
+
+        with self.assertRaises(config_module.ConfigError) as error:
+            config_module.load_config()
+
+        self.assertIn("no Groq API key", str(error.exception))
+
+    def test_invalid_provider_mode_raises_config_error(self):
+        self.write_global_config(
+            """
+[provider]
+mode = "anthropic"
+""".strip()
+        )
+
+        with self.assertRaises(config_module.ConfigError) as error:
+            config_module.load_config()
+
+        self.assertIn("Invalid provider mode", str(error.exception))
+
     def test_project_config_can_force_local_even_with_groq_key(self):
         os.environ["GROQ_API_KEY"] = "gsk_env_test"
         (self.repo / ".devlog.toml").write_text(

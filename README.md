@@ -150,7 +150,16 @@ To use Groq Cloud, either set `GROQ_API_KEY` in your shell or put a key in confi
 api_key = "gsk_..."
 ```
 
-With `provider.mode = "auto"`, devlog uses Groq when an API key is available and Ollama when it is not.
+You can also point `api_key` at an environment variable:
+
+```toml
+[groq]
+api_key = "$DEVLOG_GROQ_KEY"
+```
+
+With `provider.mode = "auto"`, devlog uses Groq when an API key is available and Ollama when it is not. Set `provider.mode = "local"` to force Ollama even when a Groq key is present, or `provider.mode = "cloud"` to require Groq and fail fast when no key is configured.
+
+Groq is a cloud dependency. If Groq is unavailable, your network is offline, or the API returns an error, devlog reports the provider error and stops without writing a partial log. Switch `provider.mode` back to `local` to continue with Ollama.
 
 ---
 

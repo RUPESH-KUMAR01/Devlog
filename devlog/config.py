@@ -12,6 +12,10 @@ CONFIG_DIR = Path.home() / ".config" / "devlog"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
 
+class ConfigError(Exception):
+    pass
+
+
 @dataclass
 class Config:
     provider: str
@@ -67,7 +71,10 @@ def _resolve_groq_api_key(groq: dict) -> str | None:
     api_key = str(groq.get("api_key") or "").strip()
 
     if api_key.startswith("$"):
-        return os.getenv(api_key[1:]) or None
+        env_name = api_key[1:].strip()
+        if not env_name:
+            return None
+        return os.getenv(env_name) or None
 
     if api_key:
         return api_key
@@ -80,22 +87,20 @@ def _resolve_groq_api_key(groq: dict) -> str | None:
 
 
 def _resolve_provider(mode: str, groq_api_key: str | None) -> str:
-    normalized = mode.strip().lower()
-
-    if normalized == "auto":
+    if mode == "auto":
         return "groq" if groq_api_key else "ollama"
 
-    if normalized in {"local", "ollama"}:
+    if mode in {"local", "ollama"}:
         return "ollama"
 
-    if normalized in {"cloud", "groq"}:
+    if mode in {"cloud", "groq"}:
         if not groq_api_key:
-            raise ValueError(
+            raise ConfigError(
                 "Groq cloud inference is selected, but no Groq API key is configured."
             )
         return "groq"
 
-    raise ValueError(
+    raise ConfigError(
         "Invalid provider mode. Use auto, local, ollama, cloud, or groq."
     )
 
@@ -130,7 +135,7 @@ def load_config() -> Config:
     project = load_project_config()
     _merge_config(data, project)
 
-    provider_mode = data["provider"]["mode"]
+    provider_mode = str(data["provider"].get("mode") or "auto").strip().lower()
     groq_api_key = _resolve_groq_api_key(data["groq"])
 
     return Config(
