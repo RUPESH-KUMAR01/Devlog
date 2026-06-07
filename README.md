@@ -215,9 +215,3 @@ git clone https://github.com/RUPESH-KUMAR01/Devlog
 cd devlog-cli
 pip install -e ".[dev]"
 ```
-
----
-
-## License
-
-MIT
