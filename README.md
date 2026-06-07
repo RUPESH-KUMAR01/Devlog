@@ -2,7 +2,7 @@
 
 > A git-powered development journal. Every commit becomes a structured learning log — automatically.
 
-Instead of losing context between commits, `devlog-cli` uses a local LLM to analyze your diff and generate a markdown log covering what was built, why, what you learned, and what to do next.
+Instead of losing context between commits, `devlog-cli` uses an LLM to analyze your diff and generate a markdown log covering what was built, why, what you learned, and what to do next.
 
 ```
 $ git commit -m "add user verification"
@@ -69,12 +69,12 @@ devlog          ← this tool
     ↓
 git show HEAD   (diff collector)
     ↓
-Ollama          (local LLM, no API key needed)
+Ollama or Groq  (auto-selected from config)
     ↓
 docs/devlogs/NNN-slug.md
 ```
 
-No cloud. No API keys. No data leaves your machine.
+By default, devlog uses local Ollama. If a Groq API key is configured, devlog automatically switches to Groq Cloud inference.
 
 ---
 
@@ -85,6 +85,7 @@ No cloud. No API keys. No data leaves your machine.
 - Python 3.10+
 - [Ollama](https://ollama.com) running locally
 - A pulled model, e.g. `ollama pull llama3`
+- Optional: a Groq API key for cloud inference
 
 ### Install devlog-cli
 
@@ -113,9 +114,18 @@ This writes a `post-commit` hook into `.git/hooks/`. From this point on, every `
 On first run, `devlog` creates a config file at `~/.config/devlog/config.toml`:
 
 ```toml
+[provider]
+mode = "auto" # auto, local, ollama, cloud, or groq
+
 [ollama]
 host = "http://localhost:11434"
 model = "llama3"
+
+[groq]
+api_key = ""
+api_key_env = "GROQ_API_KEY"
+base_url = "https://api.groq.com/openai/v1"
+model = "llama-3.3-70b-versatile"
 
 [output]
 dir = "docs/devlogs"
@@ -132,6 +142,15 @@ model = "mistral"
 ```
 
 Project-level config takes precedence over global config.
+
+To use Groq Cloud, either set `GROQ_API_KEY` in your shell or put a key in config:
+
+```toml
+[groq]
+api_key = "gsk_..."
+```
+
+With `provider.mode = "auto"`, devlog uses Groq when an API key is available and Ollama when it is not.
 
 ---
 
@@ -171,9 +190,10 @@ The number is based on how many logs already exist in the output directory, so t
 | Provider | Status | Notes |
 |----------|--------|-------|
 | Ollama (local) | ✅ Supported | Default. No API key needed. |
-| Anthropic | 🔜 Planned | Set `provider = "anthropic"` in config |
-| OpenAI | 🔜 Planned | Set `provider = "openai"` in config |
-| Gemini | 🔜 Planned | Set `provider = "gemini"` in config |
+| Groq Cloud | ✅ Supported | Auto-selected when a Groq API key is configured. |
+| Anthropic | 🔜 Planned | Future cloud provider. |
+| OpenAI | 🔜 Planned | Future cloud provider. |
+| Gemini | 🔜 Planned | Future cloud provider. |
 
 The provider interface is designed so adding a new one means implementing a single function:
 
@@ -193,7 +213,7 @@ devlog-cli/
 │   ├── cli.py          # entry point, subcommands
 │   ├── collector.py    # runs git show HEAD, parses output
 │   ├── prompt.py       # builds the LLM prompt from diff
-│   ├── ai.py           # Ollama client (provider interface)
+│   ├── ai.py           # Ollama and Groq clients (provider interface)
 │   ├── writer.py       # numbers, slugifies, writes .md files
 │   └── config.py       # loads and merges global + project config
 ├── pyproject.toml
@@ -203,11 +223,11 @@ devlog-cli/
 
 ---
 
-## Why local LLM
+## Why local by default
 
 - Your diffs contain private business logic. They shouldn't leave your machine by default.
 - Ollama is free, runs offline, and is fast enough for this use case.
-- Cloud providers are opt-in — you choose when to enable them.
+- Groq Cloud is opt-in and only selected when a key is configured.
 
 ---
 

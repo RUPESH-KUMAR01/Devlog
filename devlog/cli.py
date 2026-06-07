@@ -96,8 +96,12 @@ def show_config():
     """Show resolved configuration."""
  
     config = load_config()
+    typer.echo(f"provider      {config.provider}")
+    typer.echo(f"provider_mode {config.provider_mode}")
     typer.echo(f"ollama_host   {config.ollama_host}")
     typer.echo(f"ollama_model  {config.ollama_model}")
+    typer.echo(f"groq_model    {config.groq_model}")
+    typer.echo(f"groq_api_key  {'configured' if config.groq_api_key else 'missing'}")
     typer.echo(f"output_dir    {config.output_dir}")
     typer.echo(f"include_diff  {config.include_diff}")
  
