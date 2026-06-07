@@ -138,7 +138,9 @@ Project-level config takes precedence over global config.
 ## CLI reference
 
 ```
-devlog                  Generate a log for HEAD (run manually)
+devlog                  Generate a log from the entire diff in one LLM pass
+devlog --mode file      Generate a log using per-file summaries instead
+devlog generate --mode file Same behavior, using the explicit subcommand
 devlog install          Install post-commit hook in current repo
 devlog uninstall        Remove the hook from current repo
 devlog config           Print resolved config (global + project merged)
